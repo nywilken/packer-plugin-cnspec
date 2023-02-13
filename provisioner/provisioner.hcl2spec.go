@@ -38,6 +38,7 @@ type FlatConfig struct {
 	WinRMPassword        *string           `mapstructure:"winrm_password" cty:"winrm_password" hcl:"winrm_password"`
 	UseProxy             *bool             `mapstructure:"use_proxy" cty:"use_proxy" hcl:"use_proxy"`
 	Output               *string           `mapstructure:"output" cty:"output" hcl:"output"`
+	OutFilePath          *string           `mapstructure:"output_file" cty:"output_file" hcl:"output_file"`
 	ScoreThreshold       *int              `mapstructure:"score_threshold" cty:"score_threshold" hcl:"score_threshold"`
 	MondooConfigPath     *string           `mapstructure:"mondoo_config_path" cty:"mondoo_config_path" hcl:"mondoo_config_path"`
 }
@@ -82,6 +83,7 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"winrm_password":             &hcldec.AttrSpec{Name: "winrm_password", Type: cty.String, Required: false},
 		"use_proxy":                  &hcldec.AttrSpec{Name: "use_proxy", Type: cty.Bool, Required: false},
 		"output":                     &hcldec.AttrSpec{Name: "output", Type: cty.String, Required: false},
+		"output_file":                &hcldec.AttrSpec{Name: "output_file", Type: cty.String, Required: false},
 		"score_threshold":            &hcldec.AttrSpec{Name: "score_threshold", Type: cty.Number, Required: false},
 		"mondoo_config_path":         &hcldec.AttrSpec{Name: "mondoo_config_path", Type: cty.String, Required: false},
 	}

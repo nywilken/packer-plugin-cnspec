@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -106,6 +107,8 @@ type Config struct {
 	UseProxy bool `mapstructure:"use_proxy"`
 	// Set output format: summary, full, yaml, json, csv, compact, report, junit (default "compact")
 	Output string `mapstructure:"output"`
+	// Store scan results to an output file path.
+	OutFilePath string `mapstructure:"output_file"`
 	// An integer value to set the `score_threshold` of mondoo scans. Defaults to `0` which results in
 	// a passing score regardless of what scan results are returned.
 	ScoreThreshold int `mapstructure:"score_threshold"`
@@ -584,6 +587,9 @@ func (p *Provisioner) executeCnspec(ui packer.Ui, comm packer.Communicator) erro
 	}
 	ui.Message(buf.String())
 
+	if p.config.OutFilePath != "" {
+		ioutil.WriteFile(p.config.OutFilePath, buf.Bytes(), 0666)
+	}
 	// default is to pass all controls
 	scoreThreshold := 100
 	if p.config.OnFailure == "continue" {
