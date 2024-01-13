@@ -1,3 +1,6 @@
+# Copyright (c) Mondoo, Inc.
+# SPDX-License-Identifier: BUSL-1.1
+
 /*
     DESCRIPTION:
     Rocky Linux 8 variables used by the Packer Plugin for VMware vSphere (vsphere-iso).
@@ -28,11 +31,11 @@ vm_disk_thin_provisioned = true
 vm_network_card          = "vmxnet3"
 
 // Removable Media Settings
-iso_url            = "https://download.rockylinux.org/pub/rocky/8.7/isos/x86_64/Rocky-x86_64-dvd1.iso"
+iso_url            = "https://download.rockylinux.org/pub/rocky/8/isos/x86_64/Rocky-8.9-x86_64-minimal.iso"
 iso_path           = "packer_cache/"
-iso_file           = "2c26025b225a69dcec1e521fc7a44b2465e10587.iso"
+iso_file           = "06019fd7c4f956b2b0ed37393e81c577885e4ebd518add249769846711a09dc4.iso"
 iso_checksum_type  = "sha256"
-iso_checksum_value = "4827dce1c58560d3ca470a5053e8d86ba059cbb77cfca3b5f6a5863d2aac5b84"
+iso_checksum_value = "06019fd7c4f956b2b0ed37393e81c577885e4ebd518add249769846711a09dc4"
 
 // Boot Settings
 vm_boot_order = "disk,cdrom"

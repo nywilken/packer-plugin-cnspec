@@ -1,3 +1,5 @@
 tions
 pkrvars
 pkr
+linux
+mkpasswd

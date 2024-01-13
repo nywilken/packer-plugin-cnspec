@@ -1,3 +1,6 @@
+# Copyright (c) Mondoo, Inc.
+# SPDX-License-Identifier: BUSL-1.1
+
 
 packer {
   required_plugins {
@@ -6,7 +9,7 @@ packer {
       source  = "github.com/hashicorp/amazon"
     }
     cnspec = {
-      version = ">= 6.1.3"
+      version = ">= 9.0.0"
       source  = "github.com/mondoohq/cnspec"
     }
   }
@@ -57,13 +60,15 @@ build {
   provisioner "shell" {
     inline = [
       "sudo hostnamectl set-hostname ${var.image_prefix}-${local.timestamp}",
-      "sudo yum update -y",
-      "sudo yum upgrade -y"]
+    ]
   }
 
   provisioner "cnspec" {
     on_failure = "continue"
     asset_name = "${var.image_prefix}-${local.timestamp}"
+    sudo {
+      active = true
+    }
     annotations = {
       Source_AMI    = "{{ .SourceAMI }}"
       Creation_Date = "{{ .SourceAMICreationDate }}"

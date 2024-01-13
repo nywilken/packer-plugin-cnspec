@@ -1,3 +1,6 @@
+# Copyright (c) Mondoo, Inc.
+# SPDX-License-Identifier: BUSL-1.1
+
 packer {
   required_version = ">= 1.8.4"
   required_plugins {
@@ -10,7 +13,7 @@ packer {
       source  = "github.com/hashicorp/vsphere"
     }
     cnspec = {
-      version = ">= v6.1.4"
+      version = ">= 9.0.0"
       source  = "github.com/mondoohq/cnspec"
     }
   }

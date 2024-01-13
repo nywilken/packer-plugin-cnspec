@@ -1,3 +1,6 @@
+// Copyright (c) Mondoo, Inc.
+// SPDX-License-Identifier: BUSL-1.1
+
 package provisioner
 
 //go:generate go run github.com/hashicorp/packer-plugin-sdk/cmd/packer-sdc mapstructure-to-hcl2 -type Config,SudoConfig
@@ -24,21 +27,18 @@ import (
 	"github.com/hashicorp/packer-plugin-sdk/template/config"
 	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
 	"github.com/mitchellh/mapstructure"
-	"github.com/spf13/afero"
 	"github.com/spf13/viper"
-	config_loader "go.mondoo.com/cnquery/cli/config"
-	"go.mondoo.com/cnquery/logger"
-	"go.mondoo.com/cnquery/motor/asset"
-	inventory "go.mondoo.com/cnquery/motor/inventory/v1"
-	"go.mondoo.com/cnquery/motor/providers"
-	"go.mondoo.com/cnquery/motor/vault"
-	"go.mondoo.com/cnquery/upstream"
-	cnspec_config "go.mondoo.com/cnspec/apps/cnspec/cmd/config"
-	"go.mondoo.com/cnspec/cli/reporter"
-	"go.mondoo.com/cnspec/policy"
-	"go.mondoo.com/cnspec/policy/scan"
+	config_loader "go.mondoo.com/cnquery/v9/cli/config"
+	"go.mondoo.com/cnquery/v9/logger"
+	"go.mondoo.com/cnquery/v9/providers"
+	"go.mondoo.com/cnquery/v9/providers-sdk/v1/inventory"
+	"go.mondoo.com/cnquery/v9/providers-sdk/v1/upstream"
+	"go.mondoo.com/cnquery/v9/providers-sdk/v1/vault"
+	cnspec_config "go.mondoo.com/cnspec/v9/apps/cnspec/cmd/config"
+	"go.mondoo.com/cnspec/v9/cli/reporter"
+	"go.mondoo.com/cnspec/v9/policy"
+	"go.mondoo.com/cnspec/v9/policy/scan"
 	"go.mondoo.com/packer-plugin-cnspec/version"
-	"go.mondoo.com/ranger-rpc"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -89,7 +89,7 @@ type Config struct {
 	// Mondoo Platform.
 	Annotations map[string]string `mapstructure:"annotations"`
 	// Configures incognito mode. Defaults to `true`. When set to false, scan results
-	// will not be sent to the Mondoo platform.
+	// will not be sent to Mondoo Platform.
 	Incognito bool `mapstructure:"incognito"`
 	// A list of policies to be executed (requires incognito mode).
 	Policies []string `mapstructure:"policies"`
@@ -330,21 +330,22 @@ func (p *Provisioner) ConfigSpec() hcldec.ObjectSpec {
 
 func (p *Provisioner) executeCnspec(ui packer.Ui, comm packer.Communicator) error {
 
-	assetConfig := &providers.Config{
-		Backend: providers.ProviderType_UNKNOWN,
+	assetConfig := &inventory.Config{
+		Type:    "unkown",
 		Options: map[string]string{},
 	}
 
 	if p.config.Sudo != nil && p.config.Sudo.Active {
 		ui.Message("activated sudo")
-		assetConfig.Sudo = &providers.Sudo{
-			Active: p.config.Sudo.Active,
+		assetConfig.Sudo = &inventory.Sudo{
+			Active:     p.config.Sudo.Active,
+			Executable: "sudo",
 		}
 	}
 
 	if p.buildInfo.ConnType == "" || p.buildInfo.ConnType == "ssh" {
 		ui.Message("detected packer build via ssh")
-		assetConfig.Backend = providers.ProviderType_SSH
+		assetConfig.Type = "ssh"
 		assetConfig.Host = p.buildInfo.Host
 		assetConfig.Port = int32(p.buildInfo.Port)
 		assetConfig.Insecure = true // we do not check the hostkey for the packer build
@@ -377,7 +378,7 @@ func (p *Provisioner) executeCnspec(ui packer.Ui, comm packer.Communicator) erro
 		}
 	} else if p.buildInfo.ConnType == "winrm" {
 		ui.Message("detected packer build via winrm")
-		assetConfig.Backend = providers.ProviderType_WINRM
+		assetConfig.Type = "winrm"
 		assetConfig.Host = p.buildInfo.Host
 		assetConfig.Port = int32(p.buildInfo.Port)
 		assetConfig.Insecure = true // we do not check the hostkey for the packer build
@@ -385,7 +386,7 @@ func (p *Provisioner) executeCnspec(ui packer.Ui, comm packer.Communicator) erro
 		assetConfig.Credentials = append(assetConfig.Credentials, cred)
 	} else if p.buildInfo.ConnType == "docker" {
 		ui.Message("detected packer container image build")
-		assetConfig.Backend = providers.ProviderType_DOCKER
+		assetConfig.Type = "docker-container"
 		// buildInfo.ID containers the docker container image id
 		assetConfig.Host = fmt.Sprintf("%s", p.buildInfo.ID)
 	} else {
@@ -399,11 +400,12 @@ func (p *Provisioner) executeCnspec(ui packer.Ui, comm packer.Communicator) erro
 	if p.config.PolicyBundle != "" {
 		ui.Message("load policy bundle from: " + p.config.PolicyBundle)
 		var err error
-		policyBundle, err = policy.BundleFromPaths(p.config.PolicyBundle)
+		bundleLoader := policy.DefaultBundleLoader()
+		policyBundle, err = bundleLoader.BundleFromPaths(p.config.PolicyBundle)
 		if err != nil {
 			return errors.Wrap(err, "could not load policy bundle from "+p.config.PolicyBundle)
 		}
-		policyFilters = policyBundle.PolicyMRNs()
+		p.config.Incognito = true
 	}
 
 	// If annotations are not specified, this will error out so make sure to init the map.
@@ -417,9 +419,9 @@ func (p *Provisioner) executeCnspec(ui packer.Ui, comm packer.Communicator) erro
 	}
 
 	// build configuration
-	conf := inventory.New(inventory.WithAssets(&asset.Asset{
+	conf := inventory.New(inventory.WithAssets(&inventory.Asset{
 		Name:        p.config.AssetName,
-		Connections: []*providers.Config{assetConfig},
+		Connections: []*inventory.Config{assetConfig},
 		Annotations: p.config.Annotations,
 		Labels: map[string]string{
 			"packer.io/buildname": p.config.PackerBuildName,
@@ -477,13 +479,12 @@ func (p *Provisioner) executeCnspec(ui packer.Ui, comm packer.Communicator) erro
 		if p.config.MondooConfigPath != "" {
 			paths = append(paths, p.config.MondooConfigPath)
 		} else {
-			config_loader.AppFs = afero.NewOsFs() // TODO fix in config_loader package, this should not be here
-			homeConfig, exists, err := config_loader.HomePath()
-			if err == nil && exists {
+			homeConfig, err := config_loader.HomePath(config_loader.DefaultConfigFile)
+			if err == nil && homeConfig != "" {
 				paths = append(paths, homeConfig)
 			}
 
-			if path, ok := config_loader.SystemPath(); ok {
+			if path := config_loader.SystemConfigPath(config_loader.DefaultConfigFile); path != "" {
 				paths = append(paths, path)
 			}
 		}
@@ -524,6 +525,8 @@ func (p *Provisioner) executeCnspec(ui packer.Ui, comm packer.Communicator) erro
 		}
 	}
 
+	updateProviders(ui)
+
 	var result *scan.ScanResult
 	var err error
 	if p.config.Incognito {
@@ -545,15 +548,14 @@ func (p *Provisioner) executeCnspec(ui packer.Ui, comm packer.Communicator) erro
 		serviceAccount := cfg.GetServiceCredential()
 		if serviceAccount != nil {
 			ui.Message("using service account credentials")
-			scannerOpts = append(scannerOpts, scan.WithUpstream(cfg.UpstreamApiEndpoint(), cfg.GetParentMrn()))
-			certAuth, err := upstream.NewServiceAccountRangerPlugin(serviceAccount)
-			if err != nil {
-				ui.Error("could not create service account plugin: " + err.Error())
-				return err
+			upstreamConfig := &upstream.UpstreamConfig{
+				SpaceMrn:    cfg.GetParentMrn(),
+				ApiEndpoint: cfg.UpstreamApiEndpoint(),
+				Creds:       serviceAccount,
 			}
-			plugins := []ranger.ClientPlugin{certAuth}
-			scannerOpts = append(scannerOpts, scan.WithPlugins(plugins))
+			scannerOpts = append(scannerOpts, scan.WithUpstream(upstreamConfig))
 		}
+		scannerOpts = append(scannerOpts, scan.WithRecording(providers.NullRecording{}))
 
 		ui.Message("scan packer build")
 		scanService := scan.NewLocalScanner(scannerOpts...)
@@ -567,12 +569,10 @@ func (p *Provisioner) executeCnspec(ui packer.Ui, comm packer.Communicator) erro
 	ui.Message("scan completed successfully")
 
 	// render terminal output
+	buf := &bytes.Buffer{}
 	output := p.config.Output
-	r, err := reporter.New(output)
-	if err != nil {
-		return err
-	}
-	r.IsIncognito = p.config.Incognito
+	format := reporter.Formats[output]
+	r := reporter.NewReporter(format, p.config.Incognito).WithOutput(buf)
 
 	fullReport := result.GetFull()
 	if fullReport == nil {
@@ -580,8 +580,8 @@ func (p *Provisioner) executeCnspec(ui packer.Ui, comm packer.Communicator) erro
 		ui.Error(rErr.Error())
 		return rErr
 	}
-	buf := &bytes.Buffer{}
-	err = r.Print(fullReport, buf)
+
+	err = r.WriteReport(context.Background(), fullReport)
 	if err != nil {
 		return err
 	}
@@ -605,4 +605,37 @@ func (p *Provisioner) executeCnspec(ui packer.Ui, comm packer.Communicator) erro
 	}
 
 	return nil
+}
+
+func updateProviders(ui packer.Ui) {
+	allProviders, err := providers.ListActive()
+	if err != nil {
+		ui.Error(err.Error())
+		ui.Message("failed to list providers, not going to update cnspec providers")
+		return
+	}
+	updatedProviders := []*providers.Provider{}
+	for _, provider := range allProviders {
+		if provider.Name == "mock" || provider.Name == "core" {
+			continue
+		}
+		latestVersion, err := providers.LatestVersion(provider.Name)
+		if err != nil {
+			ui.Error(err.Error())
+			ui.Message("failed to determine latest version for " + provider.Name + " provider, not going to update it")
+			continue
+		}
+		if latestVersion != provider.Version {
+			installed, err := providers.Install(provider.Name, "")
+			if err != nil {
+				ui.Error(err.Error())
+				ui.Message("failed to install/update " + provider.Name + " provider")
+				continue
+			}
+			updatedProviders = append(updatedProviders, installed)
+		}
+	}
+	for _, p := range updatedProviders {
+		ui.Message("successfully installed " + p.Name + " provider" + " version=" + p.Version + " path=" + p.Path)
+	}
 }

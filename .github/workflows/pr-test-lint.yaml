@@ -8,40 +8,61 @@ on:
       - '**.mod'
       - 'go.sum'
 
-env:
-  GO_VERSION: 1.19
-
 jobs:
+  license-check:
+    name: License Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Copywrite
+        uses: hashicorp/setup-copywrite@v1.1.2
+
+      - name: Check Header Compliance
+        run: copywrite headers --plan
+
   goreleaser:
+    name: GoReleaser
     runs-on: self-hosted
+    env:
+      RUNNER_TYPE: "self-hosted"
     timeout-minutes: 120
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Unshallow
         run: git fetch --prune --unshallow
+      - name: Import environment variables from file
+        run: cat ".github/env" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.GO_VERSION }}
-
+          go-version: ">=${{ env.golang-version }}"
+          cache: false
       - name: Check go mod
         run: |
           go mod tidy
           git diff --exit-code go.mod
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v3.4.0
+        uses: golangci/golangci-lint-action@v3.7.0
         with:
           version: latest
+          skip-cache: true
 
       - name: "Install required tooling"
+        if: ${{ env.RUNNER_TYPE != 'self-hosted' }}
         run: |
+          # Only use sudo on self-hosted runners
           sudo apt install -y zip
+      - name: Set cnspec version
+        run: echo "CNSPEC_VERSION=$(go list -json -m go.mondoo.com/cnspec/v9 | jq -r '.Version')" >> $GITHUB_ENV
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v4
+        uses: goreleaser/goreleaser-action@v5
         with:
           version: latest
           args: release --snapshot --skip-publish --rm-dist
         env:
           API_VERSION: x5.0
+          CNSPEC_VERSION: ${{ env.CNSPEC_VERSION }}

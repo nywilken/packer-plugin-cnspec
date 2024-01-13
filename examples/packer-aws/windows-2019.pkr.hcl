@@ -1,3 +1,6 @@
+# Copyright (c) Mondoo, Inc.
+# SPDX-License-Identifier: BUSL-1.1
+
 packer {
   required_plugins {
     amazon = {
@@ -5,7 +8,7 @@ packer {
       source  = "github.com/hashicorp/amazon"
     }
     cnspec = {
-      version = ">= 6.1.3"
+      version = ">= 9.0.0"
       source  = "github.com/mondoohq/cnspec"
     }
   }
@@ -47,7 +50,7 @@ build {
   name    = "${var.image_prefix}-${local.timestamp}"
   sources = ["source.amazon-ebs.windows2019"]
 
-  provisioner "mondoo" {
+  provisioner "cnspec" {
     on_failure = "continue"
     asset_name = "${var.image_prefix}-${local.timestamp}"
     annotations = {

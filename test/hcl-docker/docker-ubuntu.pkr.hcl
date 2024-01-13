@@ -1,3 +1,6 @@
+# Copyright (c) Mondoo, Inc.
+# SPDX-License-Identifier: BUSL-1.1
+
 packer {
   required_plugins {
     docker = {
@@ -5,7 +8,7 @@ packer {
       source  = "github.com/hashicorp/docker"
     }
     cnspec = {
-      version = ">= 6.1.3"
+      version = ">= 9.0.0"
       source  = "github.com/mondoohq/cnspec"
     }
   }
@@ -22,7 +25,7 @@ build {
     "source.docker.ubuntu"
   ]
 
-  provisioner "mondoo" {
+  provisioner "cnspec" {
     on_failure =  "continue"
 
     asset_name = "test-name"
